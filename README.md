@@ -12,7 +12,7 @@ Developer with a passion for algorithmic trading, financial modeling, and machin
 ![NumPy](https://img.shields.io/badge/NumPy-013243?style=for-the-badge&logo=numpy&logoColor=white)
 ![Pandas](https://img.shields.io/badge/Pandas-150458?style=for-the-badge&logo=pandas&logoColor=white)
 
-### Stack
+### AI Stack
 ![Claude](https://img.shields.io/badge/Claude%20Code-282C34?style=for-the-badge&logo=claude&logoColor=white)
 ![Antigravity](https://img.shields.io/badge/Antigravity-428af7?style=for-the-badge&logo=googlegemini&logoColor=white)
 
