@@ -1,0 +1,163 @@
+#include 'actions/text'
+#include 'actions/documents'
+#define color red
+#define glyph document
+
+/*
+PDF Page Editor
+Replace, remove, or insert pages in a PDF.
+Run it directly to pick a PDF in Files, or share a PDF to it.
+Scanning uses the free “Actions” app by Sindre Sorhus (Scan Documents). The original PDF is never overwritten.
+*/
+
+if ShortcutInput {
+	getFirstItem(ShortcutInput)
+	@SourcePDF
+} else {
+	selectFile(false)
+	@SourcePDF
+}
+
+if !@SourcePDF {
+	alert("No PDF was selected.", "PDF Page Editor")
+	stop()
+}
+const FileExtension = getFileDetail(nil, "File Extension")
+const UpdatedText = lowercase(FileExtension)
+
+if UpdatedText != "pdf" {
+	confirm("The selected file (.{FileExtension}) does not look like a PDF. Continue anyway?", "PDF Page Editor")
+}
+getFileDetail(nil, "Name")
+replaceText("\.pdf$", "", false, true)
+@BaseName
+splitPDF(@SourcePDF)
+@Pages
+count(@Pages, "Items")
+@PageCount
+
+if @PageCount < 1 {
+	alert("No pages could be read from this PDF. It may be damaged or password-protected.", "PDF Page Editor")
+	stop()
+}
+
+menu "“{@BaseName}” has {@PageCount} page(s). What do you want to do?" {
+item "Replace Pages":
+	@Operation = "replace"
+	@SelectPrompt = "Select the page(s) to replace with a scan"
+item "Remove Pages":
+	@Operation = "remove"
+	@SelectPrompt = "Select the page(s) to remove"
+item "Insert After Pages":
+	@Operation = "insert"
+	@SelectPrompt = "Select the page(s) to insert scans after"
+}
+
+repeat _ for @PageCount {
+}
+chooseFromList(RepeatResults, @SelectPrompt, true, false)
+@Chosen
+count(@Chosen, "Items")
+@SelectedCount
+
+if @SelectedCount < 1 {
+	alert("No pages were selected, so nothing was changed.", "PDF Page Editor")
+	stop()
+}
+joinText(@Chosen, ",")
+replaceText("Page ", "", true, false)
+@SelectedNumbers
+@SelectedKey = ",{@SelectedNumbers},"
+
+if @Operation == "remove" {
+	const CalculationResult = @PageCount - @SelectedCount
+	if CalculationResult < 1 {
+		alert("You selected every page. Removing all pages would produce an empty PDF, so nothing was changed.", "PDF Page Editor")
+		stop()
+	}
+}
+
+for _ in @Pages {
+	@PageNumber = @RepeatIndex
+	@PageItem = @RepeatItem
+	if @SelectedKey contains ",{@PageNumber}," {
+		if @Operation == "remove" {
+			// Remove: the page is not added to the output.
+
+		} else {
+			if @Operation == "insert" {
+				@Output = @PageItem
+			}
+			@ScanStatus = "no"
+			repeat _ for 5 {
+				if @ScanStatus == "no" {
+					const Marker = "PDF Page Editor: waiting for scanned pages"
+					setClipboard(Marker)
+					if @Operation == "replace" {
+						alert("Scan replacement for page {@PageNumber}\n\nScan exactly one page, then tap Save.", "PDF Page Editor")
+					} else {
+						alert("Scan pages to insert after page {@PageNumber}\n\nYou can scan one or more pages; they are inserted in scan order. Tap Save when done.", "PDF Page Editor")
+					}
+					rawAction("com.sindresorhus.Actions.ScanDocumentsIntent", {
+						"AppIntentDescriptor": ""
+					})
+					waitToReturn()
+					const Clipboard = getClipboard()
+					getImages(Clipboard)
+					@ScanImages
+					count(@ScanImages, "Items")
+					@ScanCount
+					if @ScanCount > 0 {
+						if @Operation == "replace" {
+							if @ScanCount > 1 {
+								menu "You scanned {@ScanCount} pages, but page {@PageNumber} can only be replaced by one page." {
+								item "Use First Scanned Page":
+									getFirstItem(@ScanImages)
+									@ScanImages
+									@ScanStatus = "yes"
+								item "Scan Again":
+									// Loop again: ScanStatus is still “no”.
+
+								}
+							} else {
+								@ScanStatus = "yes"
+							}
+						} else {
+							@ScanStatus = "yes"
+						}
+					} else {
+						menu "No scanned pages were received for page {@PageNumber}. The scan may have been cancelled or failed." {
+						item "Try Again":
+							// Loop again: ScanStatus is still “no”.
+
+						item "Skip This Page":
+							@ScanStatus = "skip"
+						item "Cancel Editing":
+							alert("Editing cancelled. No file was saved.", "PDF Page Editor")
+							stop()
+						}
+					}
+				}
+			}
+			if @ScanStatus == "yes" {
+				makePDF(@ScanImages, false, "Append")
+				@Output
+			} else {
+				if @Operation == "replace" {
+					alert("Page {@PageNumber} was not replaced; the original page is kept.", "PDF Page Editor")
+					@Output = @PageItem
+				}
+			}
+		}
+	} else {
+		@Output = @PageItem
+	}
+}
+const PDF = makePDF(@Output, false, "Append")
+setName(PDF, "{@BaseName} (edited)", false)
+@EditedPDF
+const PDFPages = splitPDF(@EditedPDF)
+count(PDFPages, "Items")
+alert("Original: {@PageCount} page(s)\nResult: {} page(s)\n\nNext you will see a preview, then choose where to save the new PDF. The original file is not changed.", "PDF Page Editor")
+quicklook(@EditedPDF)
+saveFile("", @EditedPDF, false)
